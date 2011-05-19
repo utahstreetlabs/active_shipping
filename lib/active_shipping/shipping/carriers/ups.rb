@@ -90,7 +90,28 @@ module ActiveMerchant
       EU_COUNTRY_CODES = ["GB", "AT", "BE", "BG", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE"]
       
       US_TERRITORIES_TREATED_AS_COUNTRIES = ["AS", "FM", "GU", "MH", "MP", "PW", "PR", "VI"]
-      
+
+      STATUS_CODES = {
+        "001" => :billing_info_received,
+        "002" => :in_transit,
+        "003" => :exception,
+        "004" => :delivered_origin_cfs,
+        "005" => :delivered_destination_cfs,
+        "006" => :warehousing,
+        "007" => :out_for_delivery,
+        "011" => :delivered,
+        "111" => :not_available,
+        "222" => :not_available
+      }
+
+      ACTIVITY_STATUS_CODES = {
+        'I' => :in_transit,
+        'D' => :delivered,
+        'X' => :exception,
+        'P' => :pickup,
+        'M' => :manifest_pickup
+      }
+
       def requirements
         [:key, :login, :password]
       end
@@ -306,6 +327,7 @@ module ActiveMerchant
           activities = first_package.get_elements('Activity')
           unless activities.empty?
             shipment_events = activities.map do |activity|
+              status = (code = activity.get_text('Status/StatusType/Code').to_s) ? ACTIVITY_STATUS_CODES[code] : nil
               description = activity.get_text('Status/StatusType/Description').to_s
               zoneless_time = if (time = activity.get_text('Time')) &&
                                  (date = activity.get_text('Date'))
@@ -315,24 +337,28 @@ module ActiveMerchant
                 Time.utc(year, month, day, hour, minute, second)
               end
               location = location_from_address_node(activity.elements['ActivityLocation/Address'])
-              ShipmentEvent.new(description, zoneless_time, location)
+              UPSShipmentEvent.new(status, description, zoneless_time, location)
             end
             
             shipment_events = shipment_events.sort_by(&:time)
+
+            status = shipment_status(first_shipment) || shipment_events.last.status
+            estimated = estimated_delivery(first_shipment)
             
             if origin
               first_event = shipment_events[0]
               same_country = origin.country_code(:alpha2) == first_event.location.country_code(:alpha2)
               same_or_blank_city = first_event.location.city.blank? or first_event.location.city == origin.city
-              origin_event = ShipmentEvent.new(first_event.name, first_event.time, origin)
+              origin_event = UPSShipmentEvent.new(first_event.status, first_event.name, first_event.time, origin)
               if same_country and same_or_blank_city
                 shipment_events[0] = origin_event
               else
                 shipment_events.unshift(origin_event)
               end
             end
-            if shipment_events.last.name.downcase == 'delivered'
-              shipment_events[-1] = ShipmentEvent.new(shipment_events.last.name, shipment_events.last.time, destination)
+            if shipment_events.last.status == :delivered
+              shipment_events[-1] = UPSShipmentEvent.new(:delivered, shipment_events.last.name,
+                shipment_events.last.time, destination)
             end
           end
           
@@ -343,7 +369,8 @@ module ActiveMerchant
           :shipment_events => shipment_events,
           :origin => origin,
           :destination => destination,
-          :tracking_number => tracking_number)
+          :tracking_number => tracking_number,
+          :status => status)
       end
       
       def location_from_address_node(address)
@@ -366,6 +393,16 @@ module ActiveMerchant
       def response_message(xml)
         xml.get_text('/*/Response/Error/ErrorDescription | /*/Response/ResponseStatusDescription').to_s
       end
+
+      def shipment_status(shipment)
+        code = shipment.get_text('CurrentStatus/Code')
+        code && STATUS_CODES[code]
+      end
+
+      def estimated_delivery(shipment)
+        dt = shipment.get_text('EstimatedDeliveryDetails/Date')
+        dt && Date.strptime(dt, '%Y%m%d')
+      end
       
       def commit(action, request, test = false)
         ssl_post("#{test ? TEST_URL : LIVE_URL}/#{RESOURCES[action]}", request)
@@ -385,6 +422,15 @@ module ActiveMerchant
         name ||= DEFAULT_SERVICES[code]
       end
       
+    end
+
+    class UPSShipmentEvent < ShipmentEvent
+      attr_reader :status
+
+      def initialize(status, name, time, location, message=nil)
+        super(name, time, location, message)
+        @status = status
+      end
     end
   end
 end
