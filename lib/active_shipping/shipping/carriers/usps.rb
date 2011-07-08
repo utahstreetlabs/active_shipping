@@ -31,11 +31,13 @@ module ActiveMerchant
       API_CODES = {
         :us_rates => 'RateV4',
         :world_rates => 'IntlRateV2',
+        :track => 'TrackV2',
         :test => 'CarrierPickupAvailability'
       }
       USE_SSL = {
         :us_rates => false,
         :world_rates => false,
+        :track => false,
         :test => true
       }
       CONTAINERS = {
@@ -159,6 +161,11 @@ module ActiveMerchant
         end
       end
       
+      def find_tracking_info(tracking_number, options={})
+        options = @options.update(options)
+        parse_tracking_response commit(:track, build_tracking_info_request(tracking_number), options[:test] || false), options
+      end
+      
       def valid_credentials?
         # Cannot test with find_rates because USPS doesn't allow that in test mode
         test_mode? ? canned_address_verification_works? : super
@@ -270,6 +277,13 @@ module ActiveMerchant
         URI.encode(save_request(request.to_s))
       end
       
+      def build_tracking_info_request(tracking_number)
+        request = XmlNode.new('TrackFieldRequest', :USERID => @options[:login]) do |track_request|
+          track_request << XmlNode.new('TrackID', :ID => tracking_number)
+        end
+        URI.encode(save_request(request.to_s))
+      end
+      
       def parse_rate_response(origin, destination, packages, response, options={})
         success = true
         message = ''
@@ -311,6 +325,55 @@ module ActiveMerchant
         end
         
         RateResponse.new(success, message, Hash.from_xml(response), :rates => rate_estimates, :xml => response, :request => last_request)
+      end
+      
+      def parse_tracking_response(response, options={})
+        xml = REXML::Document.new(response)
+        message = xml.get_text('/Error/Description')
+        
+        success = !!xml.elements['/TrackResponse']
+        
+        if success
+          first_package = xml.elements['/TrackResponse/TrackInfo']
+          tracking_number = first_package.attributes['ID']
+
+          summary_event = tracking_event_from(first_package.get_elements('TrackSummary').first)
+          detail_events = first_package.get_elements('TrackDetail').map {|event| tracking_event_from(event)}.
+            sort_by(&:time)
+          origin = detail_events.first.location
+          shipment_events = detail_events + [summary_event]
+          status = summary_event.status
+        end
+        TrackingResponse.new(success, message, Hash.from_xml(response).values.first,
+          :xml => response,
+          :request => last_request,
+          :shipment_events => shipment_events,
+          :origin => origin,
+          :tracking_number => tracking_number,
+          :status => status)
+      end
+      
+      def tracking_event_from(event_xml)
+        description = event_xml.get_text('Event').to_s
+        zoneless_time = tracking_time_from(event_xml)
+        location = tracking_location_from(event_xml)
+        status = description.downcase.gsub(' ', '_').to_sym
+        ShipmentEvent.new(description, zoneless_time, location, status)
+      end
+      
+      def tracking_time_from(event_xml)
+        date = Date.parse(event_xml.get_text('EventDate').to_s)
+        time = Time.parse(event_xml.get_text('EventTime').to_s)
+        Time.utc(date.year, date.month, date.day, time.hour, time.min)
+      end
+      
+      def tracking_location_from(event_xml)
+        Location.new(
+                :country =>     node_text_or_nil(event_xml.elements['CountryCode']) || 'US',
+                :postal_code => node_text_or_nil(event_xml.elements['EventZIPCode']),
+                :province =>    node_text_or_nil(event_xml.elements['EventState']),
+                :city =>        node_text_or_nil(event_xml.elements['EventCity'])
+              )
       end
       
       def rates_from_response_node(response_node, packages)
