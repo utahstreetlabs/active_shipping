@@ -173,6 +173,64 @@ class USPSTest < Test::Unit::TestCase
     assert_equal rate_names, rates_response.rates.collect(&:service_name).sort
   end
   
+  def test_find_tracking_info_error
+    fixture_xml = xml_fixture('usps/tracking_error_response')
+    @carrier.expects(:commit).returns(fixture_xml)
+    assert_raise ActiveMerchant::Shipping::ResponseError do
+      @carrier.find_tracking_info("EJ958083578US", :test => true)
+    end
+  end
+
+  def test_find_tracking_info_success
+    fixture_xml = xml_fixture('usps/edgewater_to_wilmington_track_response')
+    @carrier.expects(:commit).returns(fixture_xml)
+    response = @carrier.find_tracking_info("EJ958083578US", :test => true)
+    
+    assert response.success?
+    assert_equal 'EJ958083578US', response.tracking_number
+    
+    usa = ActiveMerchant::Country.find('us')
+    
+    first_event = response.shipment_events.first
+    assert_equal :acceptance, first_event.status
+    assert_equal 'ACCEPTANCE', first_event.name
+    assert_equal 'EDGEWATER', first_event.location.city
+    assert_equal 'NJ', first_event.location.state
+    assert_equal usa, first_event.location.country
+    assert_equal '07020', first_event.location.zip
+    assert_equal Time.utc(2001, 5, 29, 21, 55), first_event.time
+   
+    second_event = response.shipment_events.second
+    assert_equal :arrival_at_unit, second_event.status
+    assert_equal 'ARRIVAL AT UNIT', second_event.name
+    assert_equal 'WILMINGTON', second_event.location.city
+    assert_equal 'DE', second_event.location.state
+    assert_equal usa, second_event.location.country
+    assert_equal '19850', second_event.location.zip
+    assert_equal Time.utc(2001, 5, 30, 10, 8), second_event.time
+    
+    third_event = response.shipment_events[2]
+    assert_equal :notice_left, third_event.status
+    assert_equal 'NOTICE LEFT', third_event.name
+    assert_equal 'WILMINGTON', third_event.location.city
+    assert_equal 'DE', third_event.location.state
+    assert_equal usa, third_event.location.country
+    assert_equal '19801', third_event.location.zip
+    assert_equal Time.utc(2001, 5, 30, 11, 7), third_event.time
+    
+    fourth_event = response.shipment_events[3]
+    assert_equal :delivered, fourth_event.status
+    assert_equal 'DELIVERED', fourth_event.name
+    assert_equal 'WILMINGTON', fourth_event.location.city
+    assert_equal 'DE', fourth_event.location.state
+    assert_equal usa, fourth_event.location.country
+    assert_equal '19801', fourth_event.location.zip
+    assert_equal Time.utc(2001, 6, 1, 8, 10), fourth_event.time
+
+    assert_equal :delivered, response.status
+    assert_equal 'EDGEWATER', response.origin.city
+  end
+  
   private
   
   def build_service_node(options = {})
