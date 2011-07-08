@@ -343,7 +343,6 @@ module ActiveMerchant
             shipment_events = shipment_events.sort_by(&:time)
 
             status = shipment_status(first_shipment) || shipment_events.last.status
-            estimated = estimated_delivery(first_shipment)
             
             if origin
               first_event = shipment_events[0]
@@ -397,11 +396,6 @@ module ActiveMerchant
       def shipment_status(shipment)
         code = shipment.get_text('CurrentStatus/Code')
         code && STATUS_CODES[code]
-      end
-
-      def estimated_delivery(shipment)
-        dt = shipment.get_text('EstimatedDeliveryDetails/Date')
-        dt && Date.strptime(dt, '%Y%m%d')
       end
       
       def commit(action, request, test = false)
