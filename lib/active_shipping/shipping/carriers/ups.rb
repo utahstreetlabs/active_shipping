@@ -337,7 +337,7 @@ module ActiveMerchant
                 Time.utc(year, month, day, hour, minute, second)
               end
               location = location_from_address_node(activity.elements['ActivityLocation/Address'])
-              UPSShipmentEvent.new(status, description, zoneless_time, location)
+              ShipmentEvent.new(description, zoneless_time, location, status)
             end
             
             shipment_events = shipment_events.sort_by(&:time)
@@ -349,7 +349,7 @@ module ActiveMerchant
               first_event = shipment_events[0]
               same_country = origin.country_code(:alpha2) == first_event.location.country_code(:alpha2)
               same_or_blank_city = first_event.location.city.blank? or first_event.location.city == origin.city
-              origin_event = UPSShipmentEvent.new(first_event.status, first_event.name, first_event.time, origin)
+              origin_event = ShipmentEvent.new(first_event.name, first_event.time, origin, first_event.status)
               if same_country and same_or_blank_city
                 shipment_events[0] = origin_event
               else
@@ -357,8 +357,8 @@ module ActiveMerchant
               end
             end
             if shipment_events.last.status == :delivered
-              shipment_events[-1] = UPSShipmentEvent.new(:delivered, shipment_events.last.name,
-                shipment_events.last.time, destination)
+              shipment_events[-1] = ShipmentEvent.new(shipment_events.last.name,
+                shipment_events.last.time, destination, :delivered)
             end
           end
           
@@ -422,15 +422,6 @@ module ActiveMerchant
         name ||= DEFAULT_SERVICES[code]
       end
       
-    end
-
-    class UPSShipmentEvent < ShipmentEvent
-      attr_reader :status
-
-      def initialize(status, name, time, location, message=nil)
-        super(name, time, location, message)
-        @status = status
-      end
     end
   end
 end
