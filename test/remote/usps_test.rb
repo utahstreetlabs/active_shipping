@@ -145,7 +145,18 @@ class USPSTest < Test::Unit::TestCase
     end
     assert response.success?, response.message
   end
-  
+
+  def test_find_tracking_info
+    response = @carrier.find_tracking_info('EJ958083578US', :test => true)
+    assert_equal :delivered, response.status
+  end
+
+  def test_find_tracking_info_error
+    assert_raise ActiveMerchant::Shipping::ResponseError do
+      @carrier.find_tracking_info('hotdogs', :test => true)
+    end
+  end
+
   def test_valid_credentials
     assert USPS.new(fixtures(:usps).merge(:test => true)).valid_credentials?
   end
