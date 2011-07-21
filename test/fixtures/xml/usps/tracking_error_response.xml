@@ -1,7 +1,10 @@
-<Error>
-  <Number></Number>
-  <Source></Source>
-  <Description></Description>
-  <HelpFile></HelpFile>
-  <HelpContext></HelpContext>
-</Error>
+<?xml version="1.0"?>
+<TrackResponse>
+  <TrackInfo ID="EJ958083578US">
+    <Error>
+      <Number>-2147219302</Number>
+      <Description>No record of that item</Description>
+      <HelpFile/><HelpContext/>
+    </Error>
+  </TrackInfo>
+</TrackResponse>

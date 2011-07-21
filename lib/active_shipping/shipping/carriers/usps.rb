@@ -329,9 +329,9 @@ module ActiveMerchant
       
       def parse_tracking_response(response, options={})
         xml = REXML::Document.new(response)
-        message = xml.get_text('/Error/Description')
+        message = xml.get_text('/TrackResponse/TrackInfo/Error/Description')
         
-        success = !!xml.elements['/TrackResponse']
+        success = !!xml.elements['/TrackResponse'] && !xml.elements['/TrackResponse/TrackInfo/Error']
         
         if success
           first_package = xml.elements['/TrackResponse/TrackInfo']
