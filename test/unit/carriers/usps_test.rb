@@ -198,7 +198,7 @@ class USPSTest < Test::Unit::TestCase
     assert_equal 'NJ', first_event.location.state
     assert_equal usa, first_event.location.country
     assert_equal '07020', first_event.location.zip
-    assert_equal Time.utc(2001, 5, 29, 21, 55), first_event.time
+    assert_equal Time.utc(2001, 5, 29, 0, 0), first_event.time
    
     second_event = response.shipment_events.second
     assert_equal :arrival_at_unit, second_event.status
