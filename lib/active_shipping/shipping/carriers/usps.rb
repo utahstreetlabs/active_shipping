@@ -340,7 +340,7 @@ module ActiveMerchant
           summary_event = tracking_event_from(first_package.get_elements('TrackSummary').first)
           detail_events = first_package.get_elements('TrackDetail').map {|event| tracking_event_from(event)}.
             sort_by(&:time)
-          origin = detail_events.first.location
+          origin = detail_events.any?? detail_events.first.location : nil
           shipment_events = detail_events + [summary_event]
           status = summary_event.status
         end
