@@ -329,9 +329,9 @@ module ActiveMerchant
       
       def parse_tracking_response(response, options={})
         xml = REXML::Document.new(response)
-        message = xml.get_text('/Error/Description')
+        message = xml.get_text('/TrackResponse/TrackInfo/Error/Description')
         
-        success = !!xml.elements['/TrackResponse']
+        success = !!xml.elements['/TrackResponse'] && !xml.elements['/TrackResponse/TrackInfo/Error']
         
         if success
           first_package = xml.elements['/TrackResponse/TrackInfo']
@@ -340,7 +340,7 @@ module ActiveMerchant
           summary_event = tracking_event_from(first_package.get_elements('TrackSummary').first)
           detail_events = first_package.get_elements('TrackDetail').map {|event| tracking_event_from(event)}.
             sort_by(&:time)
-          origin = detail_events.first.location
+          origin = detail_events.any?? detail_events.first.location : nil
           shipment_events = detail_events + [summary_event]
           status = summary_event.status
         end
@@ -363,7 +363,9 @@ module ActiveMerchant
       
       def tracking_time_from(event_xml)
         date = Date.parse(event_xml.get_text('EventDate').to_s)
-        time = Time.parse(event_xml.get_text('EventTime').to_s)
+        time_string = event_xml.get_text('EventTime').to_s
+        # if no time present in response, default to midnight
+        time = time_string.length > 0 ? Time.parse(time_string) : Time.utc(0)
         Time.utc(date.year, date.month, date.day, time.hour, time.min)
       end
       
