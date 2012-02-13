@@ -218,6 +218,8 @@ module ActiveMerchant
           xml_node << XmlNode.new('Address') do |address_node|
             address_node << XmlNode.new('PostalCode', location.postal_code)
             address_node << XmlNode.new("CountryCode", location.country_code(:alpha2))
+
+            address_node << XmlNode.new("Residential", true) unless location.commercial?
           end
         end
       end
@@ -244,7 +246,7 @@ module ActiveMerchant
                               :total_price => rated_shipment.get_text('RatedShipmentDetails/ShipmentRateDetail/TotalNetCharge/Amount').to_s.to_f,
                               :currency => currency,
                               :packages => packages,
-                              :delivery_date => rated_shipment.get_text('DeliveryTimestamp').to_s)
+                              :delivery_range => [rated_shipment.get_text('DeliveryTimestamp').to_s] * 2)
 	    end
 		
         if rate_estimates.empty?
