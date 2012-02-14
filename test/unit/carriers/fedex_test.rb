@@ -50,6 +50,18 @@ class FedExTest < Test::Unit::TestCase
     end
   end
   
+  def test_building_request_with_address_type_commercial_should_not_include_residential
+    mock_response = xml_fixture('fedex/ottawa_to_beverly_hills_rate_response')
+    expected_request = xml_fixture('fedex/ottawa_to_beverly_hills_commercial_rate_request')
+    Time.any_instance.expects(:to_xml_value).returns("2009-07-20T12:01:55-04:00")
+
+    @carrier.expects(:commit).with {|request, test_mode| Hash.from_xml(request) == Hash.from_xml(expected_request) && test_mode}.returns(mock_response)
+    destination = ActiveMerchant::Shipping::Location.from(@locations[:beverly_hills].to_hash, :address_type => :commercial)
+    response = @carrier.find_rates( @locations[:ottawa],
+                                    destination,
+                                    @packages.values_at(:book, :wii), :test => true)
+  end
+  
   def test_building_request_and_parsing_response
     expected_request = xml_fixture('fedex/ottawa_to_beverly_hills_rate_request')
     mock_response = xml_fixture('fedex/ottawa_to_beverly_hills_rate_response')
@@ -113,5 +125,18 @@ class FedExTest < Test::Unit::TestCase
       assert_equal 'FedEx', rate.carrier
       assert_equal 'GBP', rate.currency
     end
+  end
+
+  def test_delivery_range_based_on_delivery_date
+    mock_response = xml_fixture('fedex/ottawa_to_beverly_hills_rate_response').gsub('CAD', 'UKL')
+
+    @carrier.expects(:commit).returns(mock_response)
+    rate_estimates = @carrier.find_rates( @locations[:ottawa],
+                                    @locations[:beverly_hills],
+                                    @packages.values_at(:book, :wii), :test => true)
+
+    delivery_date = Date.new(2011, 7, 29)
+    assert_equal delivery_date, rate_estimates.rates[0].delivery_date
+    assert_equal [delivery_date] * 2, rate_estimates.rates[0].delivery_range
   end
 end
