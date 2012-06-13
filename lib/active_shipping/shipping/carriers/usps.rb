@@ -328,29 +328,33 @@ module ActiveMerchant
       end
       
       def parse_tracking_response(response, options={})
-        xml = REXML::Document.new(response)
-        message = xml.get_text('/TrackResponse/TrackInfo/Error/Description')
-        
-        success = !!xml.elements['/TrackResponse'] && !xml.elements['/TrackResponse/TrackInfo/Error']
-        
-        if success
-          first_package = xml.elements['/TrackResponse/TrackInfo']
-          tracking_number = first_package.attributes['ID']
-
-          summary_event = tracking_event_from(first_package.get_elements('TrackSummary').first)
-          detail_events = first_package.get_elements('TrackDetail').map {|event| tracking_event_from(event)}.
-            sort_by(&:time)
-          origin = detail_events.any?? detail_events.first.location : nil
-          shipment_events = detail_events + [summary_event]
-          status = summary_event.status
+        begin
+          xml = REXML::Document.new(response)
+          message = xml.get_text('/TrackResponse/TrackInfo/Error/Description')
+          
+          success = !!xml.elements['/TrackResponse'] && !xml.elements['/TrackResponse/TrackInfo/Error']
+          
+          if success
+            first_package = xml.elements['/TrackResponse/TrackInfo']
+            tracking_number = first_package.attributes['ID']
+            
+            summary_event = tracking_event_from(first_package.get_elements('TrackSummary').first)
+            detail_events = first_package.get_elements('TrackDetail').map {|event| tracking_event_from(event)}.
+              sort_by(&:time)
+            origin = detail_events.any?? detail_events.first.location : nil
+            shipment_events = detail_events + [summary_event]
+            status = summary_event.status
+          end
+          TrackingResponse.new(success, message, Hash.from_xml(response).values.first,
+            :xml => response,
+            :request => last_request,
+            :shipment_events => shipment_events,
+            :origin => origin,
+            :tracking_number => tracking_number,
+            :status => status)
+        rescue Exception => e
+          raise Exception, "Exception parsing:\n\n#{response}\n\nwith message #{e.message}", e.backtrace
         end
-        TrackingResponse.new(success, message, Hash.from_xml(response).values.first,
-          :xml => response,
-          :request => last_request,
-          :shipment_events => shipment_events,
-          :origin => origin,
-          :tracking_number => tracking_number,
-          :status => status)
       end
       
       def tracking_event_from(event_xml)
