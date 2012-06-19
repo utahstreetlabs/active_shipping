@@ -362,7 +362,9 @@ module ActiveMerchant
       end
       
       def tracking_time_from(event_xml)
-        date = Date.parse(event_xml.get_text('EventDate').to_s)
+        date_string = event_xml.get_text('EventDate').to_s
+        # if no date present in response, default to today
+        date = date_string.length > 0 ? Date.parse(date_string) : Date.today
         time_string = event_xml.get_text('EventTime').to_s
         # if no time present in response, default to midnight
         time = time_string.length > 0 ? Time.parse(time_string) : Time.utc(0)
