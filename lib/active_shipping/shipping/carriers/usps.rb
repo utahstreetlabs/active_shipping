@@ -339,7 +339,7 @@ module ActiveMerchant
 
           summary_event = tracking_event_from(first_package.get_elements('TrackSummary').first)
           detail_events = first_package.get_elements('TrackDetail').map {|event| tracking_event_from(event)}.
-            sort_by(&:time)
+            select {|e| !e.nil?}.sort_by(&:time)
           origin = detail_events.any?? detail_events.first.location : nil
           shipment_events = detail_events + [summary_event]
           status = summary_event.status
@@ -354,11 +354,16 @@ module ActiveMerchant
       end
       
       def tracking_event_from(event_xml)
-        description = event_xml.get_text('Event').to_s
-        zoneless_time = tracking_time_from(event_xml)
-        location = tracking_location_from(event_xml)
-        status = description.downcase.gsub(' ', '_').to_sym
-        ShipmentEvent.new(description, zoneless_time, location, status)
+        begin
+          description = event_xml.get_text('Event').to_s
+          zoneless_time = tracking_time_from(event_xml)
+          location = tracking_location_from(event_xml)
+          status = description.downcase.gsub(' ', '_').to_sym
+          ShipmentEvent.new(description, zoneless_time, location, status)
+        rescue Exception => e
+          # In the event of a parsing exception, do not return an event.
+          nil
+        end
       end
       
       def tracking_time_from(event_xml)
