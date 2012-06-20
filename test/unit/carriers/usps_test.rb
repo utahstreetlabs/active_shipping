@@ -181,6 +181,18 @@ class USPSTest < Test::Unit::TestCase
     end
   end
 
+  def test_tracking_info_empty_date_success
+    fixture_xml = xml_fixture('usps/empty_date_tracking_response')
+    @carrier.expects(:commit).returns(fixture_xml)
+    response = @carrier.find_tracking_info("EJ958083578US", :test => true)
+
+    assert response.success?
+    assert_equal 'EJ958083578US', response.tracking_number
+
+    origin_post_event = response.shipment_events[6]
+    assert_equal :notice_left, origin_post_event.status
+  end
+
   def test_find_tracking_info_success
     fixture_xml = xml_fixture('usps/edgewater_to_wilmington_track_response')
     @carrier.expects(:commit).returns(fixture_xml)
